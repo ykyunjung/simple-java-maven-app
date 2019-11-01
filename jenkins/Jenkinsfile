@@ -11,6 +11,40 @@ pipeline {
                 sh 'mvn -B -DskipTests clean package'
             }
         }
+        stage('Create docker image') { 
+            steps {
+                script {
+                    def scmVars = checkout([
+                        $class: 'GitSCM',
+                        doGenerateSubmoduleConfigurations: false,
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/ykyunjung/simple-java-maven-app.git'
+                          ]],
+                        branches: [ [name: '*/master'] ]
+                      ])
+                sh "docker build -f Dockerfile -t myapp:${scmVars.GIT_COMMIT} ." 
+                }
+            }
+        }
+        stage('Push image to OCIR') { 
+            steps {
+                script {
+                    def scmVars = checkout([
+                        $class: 'GitSCM',
+                        doGenerateSubmoduleConfigurations: false,
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/ykyunjung/simple-java-maven-app.git'
+                          ]],
+                        branches: [ [name: '*/master'] ]
+                      ])
+                sh "docker login -u ${params.REGISTRY_USERNAME} -p ${params.REGISTRY_TOKEN} iad.ocir.io"
+                sh "docker tag myapp:${scmVars.GIT_COMMIT} ${params.DOCKER_REPO}:${scmVars.GIT_COMMIT}"
+                sh "docker push ${params.DOCKER_REPO}:${scmVars.GIT_COMMIT}" 
+                env.GIT_COMMIT = scmVars.GIT_COMMIT
+                sh "export GIT_COMMIT=${env.GIT_COMMIT}"
+                }
+               }
+            }
         stage('Test') {
             steps {
                 sh 'mvn test'
